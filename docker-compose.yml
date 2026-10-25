@@ -1,0 +1,34 @@
+﻿services:
+  postgres:
+    image: postgres:17
+    container_name: organ-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: organ_donation
+      POSTGRES_USER: organ_admin
+      POSTGRES_PASSWORD: organ_dev_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U organ_admin -d organ_donation"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongodb:
+    image: mongo:8
+    container_name: organ-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: organ_admin
+      MONGO_INITDB_ROOT_PASSWORD: organ_mongo_dev_password
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  postgres_data:
+  mongo_data:
