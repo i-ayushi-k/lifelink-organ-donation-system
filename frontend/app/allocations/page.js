@@ -17,6 +17,9 @@ export default function AllocationsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [matches, setMatches] = useState([]);
+  const [matching, setMatching] = useState(false);
+  const [matchOrgan, setMatchOrgan] = useState(null);
 
   async function loadData() {
     setLoading(true);
@@ -89,11 +92,49 @@ export default function AllocationsPage() {
       setMessage(data.message || "Demo allocation created.");
       setOrganId("");
       setRecipientId("");
+      setMatches([]);
+      setMatchOrgan(null);
       await loadData();
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function findMatches() {
+    if (!organId) {
+      setError("Select an organ first.");
+      return;
+    }
+
+    setMatching(true);
+    setError("");
+    setMessage("");
+    setMatches([]);
+    setMatchOrgan(null);
+
+    try {
+      const response = await fetch(
+        `/api/matching?organ_id=${encodeURIComponent(organId)}`
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not find matches.");
+      }
+
+      setMatches(data.matches || []);
+      setMatchOrgan(data.organ);
+
+      if (data.matches?.length === 0) {
+        setMessage("No eligible recipients found for this organ.");
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setMatching(false);
     }
   }
 
@@ -128,7 +169,18 @@ export default function AllocationsPage() {
         <form className="donor-form" onSubmit={createAllocation}>
           <label>
             Available organ *
-            <select value={organId} onChange={(e) => setOrganId(e.target.value)} required>
+            <select
+              value={organId}
+              onChange={(e) => {
+                setOrganId(e.target.value);
+                setMatches([]);
+                setMatchOrgan(null);
+                setRecipientId("");
+                setError("");
+                setMessage("");
+              }}
+              required
+            >
               <option value="">Select organ</option>
               {availableOrgans.map((organ) => (
                 <option key={organ.organ_id} value={organ.organ_id}>
@@ -173,6 +225,88 @@ export default function AllocationsPage() {
             </button>
           </div>
         </form>
+      </section>
+
+      <section className="module-card">
+        <div className="module-card-heading">
+          <div>
+            <h2>Automatic Recipient Matching</h2>
+            <p>Find eligible recipients for the selected organ.</p>
+          </div>
+
+          <button
+            className="primary-button"
+            type="button"
+            onClick={findMatches}
+            disabled={!organId || matching || loading}
+          >
+            {matching ? "Finding matches..." : "Find Matches"}
+          </button>
+        </div>
+
+        {matchOrgan && (
+          <p className="form-note">
+            Organ #{matchOrgan.organ_id} · {formatLabel(matchOrgan.organ_type)}
+            · {matches.length} eligible candidates
+          </p>
+        )}
+
+        {matches.length > 0 && (
+          <div className="module-table-wrap">
+            <table className="module-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Recipient</th>
+                  <th>Blood Group</th>
+                  <th>Priority</th>
+                  <th>Waiting Since</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {matches.map((candidate) => (
+                  <tr key={candidate.recipient_id}>
+                    <td>#{candidate.rank}</td>
+                    <td>{candidate.full_name}</td>
+                    <td>{candidate.blood_group}</td>
+                    <td>{candidate.medical_priority}/5</td>
+                    <td>
+                      {candidate.joined_at
+                        ? new Date(candidate.joined_at).toLocaleDateString()
+                        : "N/A"}
+                    </td>
+                    <td>
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        onClick={() => {
+                          setRecipientId(String(candidate.recipient_id));
+                          setMessage(
+                            `Selected ${candidate.full_name}. Review before allocating.`
+                          );
+                          setError("");
+                        }}
+                      >
+                        Select
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {matchOrgan && matches.length === 0 && !matching && (
+          <p className="module-empty">
+            No eligible candidates found.
+          </p>
+        )}
+
+        <p className="form-note">
+          Educational demonstration only; not a clinical recommendation.
+        </p>
       </section>
 
       <section className="module-card">
